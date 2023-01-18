@@ -6,8 +6,8 @@ use petgraph::{
     EdgeType, Graph, Undirected,
 };
 use regex::Regex;
+use std::collections::HashMap;
 use std::ops::Add;
-use std::{collections::HashMap};
 use std::{
     fs::File,
     io::{self, BufRead},
@@ -63,7 +63,7 @@ fn main() {
 
     println!("{:?}", Dot::with_config(&graph, &[]));
 
-    // modify the graph such that every node only has an edge to every other node with weight equal to the shortest path between the nodes in the graph;
+    // modify the graph such that every node has an edge to every other node with weight equal to the shortest path between the nodes in the graph;
     for node in graph.node_indices() {
         let mut map = dijkstra(&graph, node, None, |edge| *edge.weight());
         map.remove(&node);
@@ -78,21 +78,25 @@ fn main() {
 
     let walk_length = 30;
     let start = nodes.get(start_node).unwrap();
-    
+
     // instead: iterate permutations of paths that visit each node once.
-    let paths = all_simple_paths::<Vec<_>, _>(
-        &graph,
-        *start,
-        *start,
-        0,
-        Some(walk_length + 1),
-    );
-    let max_pressure = paths
-        .map(|path| pressure_for_path(&graph, &path, walk_length as u32))
-        .max()
+    let paths = all_simple_paths::<Vec<_>, _>(&graph, *start, *start, 0, Some(walk_length + 1));
+    let (path, pressure) = paths
+        .map(|path| {
+            let pressure = pressure_for_path(&graph, &path, walk_length as u32);
+            (path, pressure)
+        })
+        .max_by_key(|(_, pressure)| *pressure)
         .unwrap();
-    println!("part 1: {}", max_pressure);
-   
+    let path_str = (&path[..path.len() - 1])
+        .iter()
+        .map(|&node| &graph[node])
+        .map(|valve| valve.name.as_str())
+        .collect::<Vec<_>>()
+        .join(" ,");
+    println!("path: {}", path_str);
+    println!("part 1: {}", pressure);
+
     // let max = max_pressure(&mut graph, *nodes.get("AA").unwrap(), 0, 30);
     // println!("max pressure: {}", max)
 }
@@ -103,7 +107,7 @@ fn pressure_for_path<Ty: EdgeType, Ix: IndexType>(
     mut time: u32,
 ) -> u32 {
     let mut pressure = 0;
-    let i = 0;
+    let mut i = 0;
     while i < path.len() - 1 {
         //move from i to i+1
         let (from, to) = (path[i], path[i + 1]);
@@ -121,6 +125,7 @@ fn pressure_for_path<Ty: EdgeType, Ix: IndexType>(
             None => break,
         }
         pressure += valve.flow_rate * time;
+        i += 1;
     }
     return pressure;
 }
