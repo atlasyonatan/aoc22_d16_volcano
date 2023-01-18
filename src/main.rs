@@ -1,5 +1,6 @@
+use linked_hash_set::LinkedHashSet;
 use petgraph::{
-    algo::{all_simple_paths, dijkstra},
+    algo::dijkstra,
     dot::Dot,
     stable_graph::{IndexType, NodeIndex},
     visit::IntoNodeReferences,
@@ -15,7 +16,8 @@ use std::{
 };
 
 fn main() {
-    let file_path = "../test.txt";
+    let file_path = "../input.txt";
+    let time = 30;
     let path = Path::new(file_path);
     let file = File::open(path).unwrap();
     let reg =
@@ -76,26 +78,62 @@ fn main() {
 
     println!("{:?}", Dot::with_config(&graph, &[]));
 
-    let walk_length = 30;
-    let start = nodes.get(start_node).unwrap();
+    let start = *nodes.get(start_node).unwrap();
+
+    // find max pressure path
+    // let mut time = time as u32;
+    // let mut pressure = 0;
+    // let mut path = LinkedHashSet::new();
+    // path.insert(start);
+    // loop {
+    //     let node = *path.back().unwrap();
+    //     let max_pressure_neighbor = graph
+    //         .neighbors_directed(node, petgraph::Direction::Outgoing)
+    //         .filter(|neighbor| !path.contains(neighbor))
+    //         .filter_map(|neighbor| {
+    //             let valve = &graph[neighbor];
+    //             let edge = graph.find_edge(node, neighbor).unwrap();
+    //             let time_spent = valve.turn_time + graph[edge];
+    //             let time_left = time.checked_sub(time_spent)?;
+    //             Some((neighbor, time_left, time_left * valve.flow_rate))
+    //         })
+    //         .max_by_key(|(_, _, pressure)| *pressure);
+    //     match max_pressure_neighbor {
+    //         Some((neighbor, time_left, pressure_release)) => {
+    //             path.insert(neighbor);
+    //             pressure += pressure_release;
+    //             time = time_left;
+    //         }
+    //         None => break,
+    //     }
+    // }
+    // println!(
+    //     "path: {}",
+    //     path.iter()
+    //         .map(|node| &graph[*node])
+    //         .map(|valve| valve.name.as_str())
+    //         .collect::<Vec<_>>()
+    //         .join(" ,")
+    // );
+    // println!("part 1: {}", pressure);
 
     // instead: iterate permutations of paths that visit each node once.
-    let paths = all_simple_paths::<Vec<_>, _>(&graph, *start, *start, 0, Some(walk_length + 1));
-    let (path, pressure) = paths
-        .map(|path| {
-            let pressure = pressure_for_path(&graph, &path, walk_length as u32);
-            (path, pressure)
-        })
-        .max_by_key(|(_, pressure)| *pressure)
-        .unwrap();
-    let path_str = (&path[..path.len() - 1])
-        .iter()
-        .map(|&node| &graph[node])
-        .map(|valve| valve.name.as_str())
-        .collect::<Vec<_>>()
-        .join(" ,");
-    println!("path: {}", path_str);
-    println!("part 1: {}", pressure);
+    // let paths = all_simple_paths::<Vec<_>, _>(&graph, *start, *start, 0, Some(walk_length/2 + 1));
+    // let (path, pressure) = paths
+    //     .map(|path| {
+    //         let pressure = pressure_for_path(&graph, &path, walk_length as u32);
+    //         (path, pressure)
+    //     })
+    //     .max_by_key(|(_, pressure)| *pressure)
+    //     .unwrap();
+    // let path_str = (&path[..path.len() - 1])
+    //     .iter()
+    //     .map(|&node| &graph[node])
+    //     .map(|valve| valve.name.as_str())
+    //     .collect::<Vec<_>>()
+    //     .join(" ,");
+    // println!("path: {}", path_str);
+    // println!("part 1: {}", pressure);
 
     // let max = max_pressure(&mut graph, *nodes.get("AA").unwrap(), 0, 30);
     // println!("max pressure: {}", max)
