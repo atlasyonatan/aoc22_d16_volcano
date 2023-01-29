@@ -42,8 +42,8 @@ pub fn create_valve_graph<Rate: Copy, Time: Copy, TunnelLength: Copy>(
 
 pub fn visit_max_pressures<Ty: EdgeType, Ix: IndexType>(
     graph: &Graph<Valve<u32, u32>, u32, Ty, Ix>,
-    current: NodeIndex<Ix>,
     visited: &mut HashSet<NodeIndex<Ix>>,
+    current: NodeIndex<Ix>,
     time: u32,
 ) -> u32 {
     let mut pressure = 0;
@@ -60,7 +60,7 @@ pub fn visit_max_pressures<Ty: EdgeType, Ix: IndexType>(
                 let added_pressure = time_left * valve.flow_rate;
 
                 visited.insert(neighbor);
-                let visit_pressure = visit_max_pressures(graph, neighbor, visited, time_left);
+                let visit_pressure = visit_max_pressures(graph, visited, neighbor, time_left);
                 visited.remove(&neighbor);
 
                 pressure = pressure.max(added_pressure + visit_pressure);
@@ -70,3 +70,101 @@ pub fn visit_max_pressures<Ty: EdgeType, Ix: IndexType>(
     }
     return pressure;
 }
+
+pub fn visit_max_pressures_2<Ty: EdgeType, Ix: IndexType>(
+    graph: &Graph<Valve<u32, u32>, u32, Ty, Ix>,
+    visited: &mut HashSet<NodeIndex<Ix>>,
+    current1: NodeIndex<Ix>,
+    time1: u32,
+    current2: NodeIndex<Ix>,
+    time2: u32,
+) -> u32 {
+    let mut pressure = 0;
+    for neighbor1 in graph
+        .neighbors_directed(current1, Outgoing)
+        .filter(|neighbor| !visited.contains(neighbor))
+        .collect::<Vec<_>>()
+    {
+        let edge = graph.find_edge(current1, neighbor1).unwrap();
+        let tunnel_time = graph[edge];
+        let valve = &graph[neighbor1];
+        match time1.checked_sub(tunnel_time + valve.turn_time) {
+            Some(time_left1) => {
+                let added_pressure1 = time_left1 * valve.flow_rate;
+
+                visited.insert(neighbor1);
+
+                for neighbor2 in graph
+                    .neighbors_directed(current2, Outgoing)
+                    .filter(|neighbor| !visited.contains(neighbor))
+                    .collect::<Vec<_>>()
+                {
+                    let edge = graph.find_edge(current2, neighbor2).unwrap();
+                    let tunnel_time = graph[edge];
+                    let valve = &graph[neighbor2];
+                    match time2.checked_sub(tunnel_time + valve.turn_time) {
+                        Some(time_left2) => {
+                            let added_pressure2 = time_left2 * valve.flow_rate;
+
+                            visited.insert(neighbor2);
+
+                            let visit_pressure = visit_max_pressures_2(
+                                graph, visited, neighbor1, time_left1, neighbor2, time_left2,
+                            );
+                            visited.remove(&neighbor2);
+
+                            pressure =
+                                pressure.max(added_pressure1 + added_pressure2 + visit_pressure);
+                        }
+                        None => continue,
+                    }
+                }
+                visited.remove(&neighbor1);
+            }
+            None => continue,
+        }
+    }
+    return pressure;
+}
+
+pub struct Walker<Time, Location> {
+    pub time: Time,
+    pub location: Location,
+}
+
+// pub fn multi_visit_max_pressures<Ty: EdgeType, Ix: IndexType>(
+//     graph: &Graph<Valve<u32, u32>, u32, Ty, Ix>,
+//     walkers: &mut [Walker<u32, NodeIndex<Ix>>],
+//     visited: &mut HashSet<NodeIndex<Ix>>,
+// ) -> u32 {
+//     let mut pressure = 0;
+//     let mut stack = Vec::new();
+//     for index in 0..walkers.len() {
+//         let walker = &mut walkers[index];
+//         let current_node = walker.location;
+//         let time = walker.time;
+//         for neighbor in graph
+//             .neighbors_directed(current_node, Outgoing)
+//             .filter(|neighbor| !visited.contains(neighbor))
+//             .collect::<Vec<_>>()
+//         {
+//             let edge = graph.find_edge(current_node, neighbor).unwrap();
+//             let tunnel_time = graph[edge];
+//             let valve = &graph[neighbor];
+//             match time.checked_sub(tunnel_time + valve.turn_time) {
+//                 Some(time_left) => {
+//                     let added_pressure = time_left * valve.flow_rate;
+
+//                     visited.insert(neighbor);
+//                     stack.push(neighbor);
+//                     // let visit_pressure = visit_max_pressures(graph, neighbor, visited, time_left);
+//                     // visited.remove(&neighbor);
+
+//                     // pressure = pressure.max(added_pressure + visit_pressure);
+//                 }
+//                 None => continue,
+//             }
+//         }
+//     }
+//     return pressure;
+// }

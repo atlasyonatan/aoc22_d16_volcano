@@ -2,6 +2,7 @@ use petgraph::{algo::dijkstra, dot::Dot, visit::IntoNodeReferences};
 use regex::Regex;
 use std::collections::HashSet;
 
+use std::time::Instant;
 use std::{
     fs::File,
     io::{self, BufRead},
@@ -9,10 +10,10 @@ use std::{
 };
 pub mod valve;
 use crate::graph_tools::connect_neighbors_min;
-use crate::valve::{create_valve_graph, visit_max_pressures};
+use crate::valve::{create_valve_graph, visit_max_pressures, visit_max_pressures_2};
 
 fn main() {
-    let file_path = "../test.txt";
+    let file_path = "../input.txt";
     let time = 30;
     let path = Path::new(file_path);
     let file = File::open(path).unwrap();
@@ -78,8 +79,12 @@ fn main() {
 
     let mut visited = HashSet::new();
     visited.insert(start);
-    let max_pressure = visit_max_pressures(&graph, start, &mut visited, time);
+    let time = time - 4;
+    let sw = Instant::now();
+    let max_pressure = visit_max_pressures_2(&graph, &mut visited, start, time, start, time);
+    let duration = sw.elapsed();
     println!("{}", max_pressure);
+    println!("{:?}", duration);
 }
 
 pub mod graph_tools;
