@@ -1,23 +1,18 @@
-use linked_hash_set::LinkedHashSet;
-use petgraph::{
-    algo::dijkstra,
-    dot::Dot,
-    stable_graph::{IndexType, NodeIndex},
-    visit::IntoNodeReferences,
-    Direction::Outgoing,
-    EdgeType, Graph, Undirected,
-};
+use petgraph::{algo::dijkstra, dot::Dot, visit::IntoNodeReferences};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
-use std::ops::Add;
+use std::collections::HashSet;
+
 use std::{
     fs::File,
     io::{self, BufRead},
     path::Path,
 };
+pub mod valve;
+use crate::graph_tools::connect_neighbors_min;
+use crate::valve::{create_valve_graph, visit_max_pressures};
 
 fn main() {
-    let file_path = "../input.txt";
+    let file_path = "../test.txt";
     let time = 30;
     let path = Path::new(file_path);
     let file = File::open(path).unwrap();
@@ -81,248 +76,10 @@ fn main() {
 
     let start = *nodes.get(start_node).unwrap();
 
-
     let mut visited = HashSet::new();
     visited.insert(start);
     let max_pressure = visit_max_pressures(&graph, start, &mut visited, time);
     println!("{}", max_pressure);
-    // find max pressure path
-    // let mut time = time as u32;
-    // let mut pressure = 0;
-    // let mut path = LinkedHashSet::new();
-    // path.insert(start);
-    // loop {
-    //     let node = *path.back().unwrap();
-    //     let max_pressure_neighbor = graph
-    //         .neighbors_directed(node, petgraph::Direction::Outgoing)
-    //         .filter(|neighbor| !path.contains(neighbor))
-    //         .filter_map(|neighbor| {
-    //             let valve = &graph[neighbor];
-    //             let edge = graph.find_edge(node, neighbor).unwrap();
-    //             let time_spent = valve.turn_time + graph[edge];
-    //             let time_left = time.checked_sub(time_spent)?;
-    //             Some((neighbor, time_left, time_left * valve.flow_rate))
-    //         })
-    //         .max_by_key(|(_, _, pressure)| *pressure);
-    //     match max_pressure_neighbor {
-    //         Some((neighbor, time_left, pressure_release)) => {
-    //             path.insert(neighbor);
-    //             pressure += pressure_release;
-    //             time = time_left;
-    //         }
-    //         None => break,
-    //     }
-    // }
-    // println!(
-    //     "path: {}",
-    //     path.iter()
-    //         .map(|node| &graph[*node])
-    //         .map(|valve| valve.name.as_str())
-    //         .collect::<Vec<_>>()
-    //         .join(" ,")
-    // );
-    // println!("part 1: {}", pressure);
-
-    // instead: iterate permutations of paths that visit each node once.
-    // let paths = all_simple_paths::<Vec<_>, _>(&graph, *start, *start, 0, Some(walk_length/2 + 1));
-    // let (path, pressure) = paths
-    //     .map(|path| {
-    //         let pressure = pressure_for_path(&graph, &path, walk_length as u32);
-    //         (path, pressure)
-    //     })
-    //     .max_by_key(|(_, pressure)| *pressure)
-    //     .unwrap();
-    // let path_str = (&path[..path.len() - 1])
-    //     .iter()
-    //     .map(|&node| &graph[node])
-    //     .map(|valve| valve.name.as_str())
-    //     .collect::<Vec<_>>()
-    //     .join(" ,");
-    // println!("path: {}", path_str);
-    // println!("part 1: {}", pressure);
-
-    // let max = max_pressure(&mut graph, *nodes.get("AA").unwrap(), 0, 30);
-    // println!("max pressure: {}", max)
 }
 
-fn pressure_for_path<Ty: EdgeType, Ix: IndexType>(
-    graph: &Graph<Valve<u32, u32>, u32, Ty, Ix>,
-    path: &[NodeIndex<Ix>],
-    mut time: u32,
-) -> u32 {
-    let mut pressure = 0;
-    let mut i = 0;
-    while i < path.len() - 1 {
-        //move from i to i+1
-        let (from, to) = (path[i], path[i + 1]);
-        let edge = graph.find_edge(from, to).unwrap();
-        let walk_time = graph[edge];
-        match time.checked_sub(walk_time) {
-            Some(time_left) => time = time_left,
-            None => break,
-        }
-
-        //open newly visited valve
-        let valve = &graph[to];
-        match time.checked_sub(valve.turn_time) {
-            Some(time_left) => time = time_left,
-            None => break,
-        }
-        pressure += valve.flow_rate * time;
-        i += 1;
-    }
-    return pressure;
-}
-
-fn connect_neighbors_min<N, E: Copy + Add<Output = E> + Ord, Ty: EdgeType, Ix: IndexType>(
-    graph: &mut Graph<N, E, Ty, Ix>,
-    node: NodeIndex<Ix>,
-    allow_self: bool,
-) {
-    let predecessors: Vec<_> = graph
-        .neighbors_directed(node, petgraph::Direction::Incoming)
-        .collect();
-    let succcessors: Vec<_> = graph
-        .neighbors_directed(node, petgraph::Direction::Outgoing)
-        .collect();
-    for &i in predecessors.iter() {
-        let edge_from_i = graph.find_edge(i, node).unwrap();
-        for &j in succcessors.iter() {
-            if !allow_self && i == j {
-                continue;
-            }
-            let edge_to_j = graph.find_edge(node, j).unwrap();
-            let new_weight = graph[edge_from_i] + graph[edge_to_j];
-            if let Some(edge) = graph.find_edge(i, j) {
-                graph[edge] = graph[edge].min(new_weight);
-            } else {
-                graph.add_edge(i, j, new_weight);
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Valve<Rate, Time> {
-    name: String,
-    flow_rate: Rate,
-    turn_time: Time,
-}
-
-fn create_valve_graph<Rate: Copy, Time: Copy, TunnelLength: Copy>(
-    inputs: Vec<(String, Rate, Vec<String>)>,
-    tunnel_length: TunnelLength,
-    valve_operation_time: Time,
-) -> (
-    Graph<Valve<Rate, Time>, TunnelLength, Undirected>,
-    HashMap<String, petgraph::stable_graph::NodeIndex>,
-) {
-    let mut graph = Graph::new_undirected();
-    let mut nodes = HashMap::new();
-    for (name, flow_rate, _) in inputs.iter() {
-        let node = graph.add_node(Valve {
-            name: name.to_string(),
-            flow_rate: *flow_rate,
-            turn_time: valve_operation_time,
-        });
-        nodes.insert(name.to_string(), node);
-    }
-    for (name, _, connections) in inputs {
-        let node = nodes.get(&name).unwrap();
-        for neighbor in connections {
-            let neighbor = nodes.get(&neighbor).unwrap();
-            graph.add_edge(*node, *neighbor, tunnel_length);
-        }
-    }
-    (graph, nodes)
-}
-
-fn visit_max_pressures<Ty: EdgeType, Ix: IndexType>(
-    graph: &Graph<Valve<u32, u32>, u32, Ty, Ix>,
-    current: NodeIndex<Ix>,
-    visited: &mut HashSet<NodeIndex<Ix>>,
-    time: u32
-) -> u32 {
-    let mut pressure = 0;
-    for neighbor in graph
-        .neighbors_directed(current, Outgoing)
-        .filter(|neighbor| !visited.contains(neighbor))
-        .collect::<Vec<_>>()
-    {
-        let edge = graph.find_edge(current, neighbor).unwrap();
-        let tunnel_time = graph[edge];
-        let valve = &graph[neighbor];
-        match time.checked_sub(tunnel_time + valve.turn_time) {
-            Some(time_left) => {
-                let added_pressure = time_left * valve.flow_rate;
-                
-                visited.insert(neighbor);
-                let visit_pressure = visit_max_pressures(graph, neighbor, visited, time_left);
-                visited.remove(&neighbor);
-
-                pressure = pressure.max(added_pressure + visit_pressure);
-            }
-            None => continue,
-        }
-    }
-    return pressure;
-    // let mut pressure = 0;
-    // let mut i = 0;
-    // while i < path.len() - 1 {
-    //     //move from i to i+1
-    //     let (from, to) = (path[i], path[i + 1]);
-    //     let edge = graph.find_edge(from, to).unwrap();
-    //     let walk_time = graph[edge];
-    //     match time.checked_sub(walk_time) {
-    //         Some(time_left) => time = time_left,
-    //         None => break,
-    //     }
-
-    //     //open newly visited valve
-    //     let valve = &graph[to];
-    //     match time.checked_sub(valve.turn_time) {
-    //         Some(time_left) => time = time_left,
-    //         None => break,
-    //     }
-    //     pressure += valve.flow_rate * time;
-    //     i += 1;
-    // }
-    // return pressure;
-}
-
-// fn max_pressure(
-//     graph: &mut Graph<Valve<u32, u32>, u32, Undirected>,
-//     start: NodeIndex,
-//     total_pressure: u32,
-//     length: u32,
-// ) -> u32 {
-//     if length == 0 {
-//         return total_pressure;
-//     }
-//     let mut max = total_pressure;
-
-//     //continue walking without opening valve
-//     let mut walker = graph.neighbors(start).detach();
-//     while let Some((edge, node)) = walker.next(graph) {
-//         if let Some(length) = length.checked_sub(graph[edge]) {
-//             max = max.max(max_pressure(graph, node, total_pressure, length));
-//         }
-//     }
-//     if graph[start].flow_rate > 0 {
-//         if let Some(length) = length.checked_sub(graph[start].turn_time) {
-//             //open valve
-//             let total_pressure = total_pressure + graph[start].flow_rate * length;
-//             let flow_rate = graph[start].flow_rate;
-//             graph[start].flow_rate = 0;
-//             max = max.max(total_pressure);
-//             let mut walker = graph.neighbors(start).detach();
-//             while let Some((edge, node)) = walker.next(graph) {
-//                 if let Some(length) = length.checked_sub(graph[edge]) {
-//                     max = max.max(max_pressure(graph, node, total_pressure, length));
-//                 }
-//             }
-//             graph[start].flow_rate = flow_rate;
-//         }
-//     }
-//     max
-// }
+pub mod graph_tools;

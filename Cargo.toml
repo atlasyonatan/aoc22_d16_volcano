@@ -8,4 +8,3 @@ edition = "2021"
 [dependencies]
 regex = "1.7"
 petgraph = "0.6"
-linked_hash_set = "0.1.4"
